@@ -1,0 +1,271 @@
+# 6-DOF Atmospheric Trajectory Simulator
+
+A modular six-degree-of-freedom (6-DOF) rigid-body trajectory simulator operating primarily within the atmosphere. The simulator supports free-fall objects, rockets, and simple aircraft with quaternion-based rotational dynamics.
+
+## Features
+
+- **6-DOF Rigid Body Dynamics**: Full translational and rotational dynamics with quaternion attitude propagation
+- **Modular Architecture**: Separated C++ core for numerical computation and Python orchestration
+- **Headless Core**: Clean API interface designed for future GUI layers (native or web-based)
+- **Extensible Models**: Abstract interfaces for aerodynamics, atmosphere, and thrust
+- **Control & Guidance**: Separate control and guidance logic interfaces
+- **Monte-Carlo Support**: Batch simulation manager for parameter studies
+- **Visualization**: 2D time-history plots and 3D trajectory visualization
+
+## Architecture
+
+The simulator follows a layered architecture:
+
+```
+┌─────────────────────────────────────┐
+│   Future GUI Layer (Native/Web)     │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│   Python API (Headless Interface)    │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│   Python Orchestration Layer          │
+│   - Configuration                     │
+│   - Models                            │
+│   - Control & Guidance                │
+│   - Visualization                     │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│   C++ Dynamics Core                  │
+│   - 6-DOF Equations of Motion        │
+│   - RK4 Integration                   │
+│   - Frame Transformations             │
+└──────────────────────────────────────┘
+```
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8 or higher
+- C++17 compatible compiler (GCC, Clang, or MSVC)
+- CMake 3.15 or higher
+- NumPy and Matplotlib
+
+### Building from Source
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd trajectory
+```
+
+2. Build the C++ library:
+```bash
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+3. Install the Python package:
+```bash
+pip install -e .
+```
+
+### Optional: Python Bindings with pybind11
+
+For faster Python-C++ integration, install pybind11:
+```bash
+pip install pybind11
+```
+
+Then rebuild the C++ library - pybind11 bindings will be automatically generated.
+
+## Quick Start
+
+### Basic Usage
+
+```python
+from trajectory_sim.config.vehicle import VehicleConfig
+from trajectory_sim.config.mission import MissionConfig
+from trajectory_sim.models.atmosphere import ExponentialAtmosphere, NoWind
+from trajectory_sim.models.coefficient_models import SimpleAeroModel
+from trajectory_sim.models.thrust import NoThrust
+from trajectory_sim.control.controller import NullController
+from trajectory_sim.core.api import SimulationConfig, SimulationRunner
+
+# Configure vehicle
+vehicle = VehicleConfig(
+    mass=100.0,  # kg
+    Ixx=10.0, Iyy=10.0, Izz=10.0,  # kg*m^2
+    ref_area=1.0,  # m^2
+    ref_length=1.0,  # m
+)
+
+# Configure mission
+mission = MissionConfig(
+    pos_I=(0.0, 0.0, 10000.0),  # Start at 10 km
+    vel_I=(0.0, 0.0, 0.0),
+    euler_angles=(0.0, 0.0, 0.0),
+    t_start=0.0,
+    t_end=60.0,
+    dt=0.01,
+)
+
+# Setup models
+atmosphere = ExponentialAtmosphere(wind_model=NoWind())
+aero_model = SimpleAeroModel()
+thrust = NoThrust()
+controller = NullController()
+
+# Create and run simulation
+config = SimulationConfig(
+    vehicle=vehicle,
+    mission=mission,
+    atmosphere=atmosphere,
+    aero_model=aero_model,
+    thrust=thrust,
+    controller=controller,
+)
+
+runner = SimulationRunner(config)
+runner.run()
+
+# Get results
+results = runner.get_results()
+final_state = runner.get_final_state()
+```
+
+### Running Examples
+
+The package includes example configurations:
+
+```bash
+# Free-fall object
+python examples/free_fall/run_free_fall.py
+
+# Rocket with thrust
+python examples/rocket/run_rocket.py
+
+# Simple aircraft
+python examples/aircraft/run_aircraft.py
+```
+
+## Project Structure
+
+```
+trajectory/
+├── cpp/                    # C++ core library
+│   ├── math/              # Math utilities
+│   ├── frames/            # Frame transformations
+│   ├── dynamics/          # 6-DOF dynamics
+│   ├── integrators/       # Time integration
+│   ├── models/            # Physical models
+│   └── api/               # C API for Python
+├── src/
+│   └── trajectory_sim/    # Python package
+│       ├── core/          # Core simulation engine
+│       ├── config/        # Configuration
+│       ├── models/        # Python model wrappers
+│       ├── control/       # Control laws
+│       ├── guidance/      # Guidance logic
+│       ├── monte_carlo/   # Monte-Carlo simulation
+│       ├── visualization/ # Plotting utilities
+│       └── runner/        # Simulation execution
+├── examples/              # Example configurations
+├── tests/                 # Test suite
+├── CMakeLists.txt         # C++ build configuration
+└── pyproject.toml         # Python package config
+```
+
+## Coordinate Frames
+
+- **Inertial Frame (I)**: Earth-fixed NED or Cartesian frame
+- **Body Frame (B)**: Origin at center of mass, +X forward, +Y right, +Z up
+- **Aerodynamic Frame (A)**: Origin at nose, +X backward (drag), +Y right, +Z down
+
+## State Vector
+
+The state vector consists of:
+- Position `r_I` in inertial frame [x, y, z]
+- Velocity `v_I` in inertial frame [vx, vy, vz]
+- Quaternion `q_BI` from inertial to body frame [w, x, y, z]
+- Angular velocity `ω_B` in body frame [p, q, r]
+- Mass `m(t)`
+
+## Control Inputs
+
+Four abstract control channels:
+- `p`: Roll control
+- `q`: Pitch control
+- `r`: Yaw control
+- `i`: Brake/drag control
+
+Control meaning is defined within coefficient models.
+
+## Extending the Simulator
+
+### Adding New Aerodynamic Models
+
+Create a class inheriting from `AeroCoefficientModel`:
+
+```python
+from trajectory_sim.models.coefficient_models import AeroCoefficientModel
+
+class MyAeroModel(AeroCoefficientModel):
+    def evaluate(self, alpha, beta, mach, control_p, control_q, control_r, control_i):
+        # Your coefficient logic here
+        return {
+            "Cx": ...,
+            "Cy": ...,
+            "Cz": ...,
+            "Cmx": ...,
+            "Cmy": ...,
+            "Cmz": ...,
+        }
+```
+
+### Adding New Atmosphere Models
+
+Inherit from `AtmosphereModel`:
+
+```python
+from trajectory_sim.models.atmosphere import AtmosphereModel
+
+class MyAtmosphere(AtmosphereModel):
+    def get_atmosphere(self, altitude):
+        # Your atmosphere model
+        return {"density": ..., "pressure": ..., ...}
+    
+    def get_wind(self, pos_I, time):
+        # Your wind model
+        return np.array([wx, wy, wz])
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+pytest tests/
+```
+
+## Documentation
+
+See the specification document `6_DOF_trajectory_simulator.pdf` for detailed architecture and API documentation.
+
+## License
+
+MIT License
+
+## Contributing
+
+Contributions are welcome! Please ensure code follows the existing style and includes tests.
+
+## Future Work
+
+- Full C++ implementation integration
+- Additional aerodynamic models
+- Advanced control laws (PID, etc.)
+- Web-based GUI interface
+- Real-time visualization
+- Export to common formats (CSV, HDF5, etc.)
