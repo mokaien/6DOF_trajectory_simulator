@@ -6,10 +6,9 @@
 #include "../integrators/rk4.hpp"
 #include "../models/aero_model.hpp"
 #include <cmath>
+#include <utility>
 
-namespace trajectory {
-namespace api {
-
+using namespace trajectory;
 using namespace trajectory::math;
 using namespace trajectory::frames;
 using namespace trajectory::dynamics;
@@ -17,33 +16,26 @@ using namespace trajectory::integrators;
 using namespace trajectory::models;
 
 // Internal helper functions
-namespace {
-
-Vector3 array_to_vector(const double arr[3]) {
+static Vector3 array_to_vector(const double arr[3]) {
     return Vector3(arr[0], arr[1], arr[2]);
 }
 
-void vector_to_array(const Vector3& vec, double arr[3]) {
+static void vector_to_array(const Vector3& vec, double arr[3]) {
     arr[0] = vec.x;
     arr[1] = vec.y;
     arr[2] = vec.z;
 }
 
-Quaternion array_to_quaternion(const double arr[4]) {
+static Quaternion array_to_quaternion(const double arr[4]) {
     return Quaternion(arr[0], arr[1], arr[2], arr[3]);
 }
 
-void quaternion_to_array(const Quaternion& q, double arr[4]) {
+static void quaternion_to_array(const Quaternion& q, double arr[4]) {
     arr[0] = q.w;
     arr[1] = q.x;
     arr[2] = q.y;
     arr[3] = q.z;
 }
-
-} // anonymous namespace
-
-} // namespace api
-} // namespace trajectory
 
 // C API implementation
 extern "C" {
@@ -58,11 +50,6 @@ void step_simulation(
     double time,
     double dt
 ) {
-    using namespace trajectory;
-    using namespace trajectory::math;
-    using namespace trajectory::frames;
-    using namespace trajectory::dynamics;
-    using namespace trajectory::integrators;
 
     // Convert C structures to C++ types
     Vector3 pos_I = array_to_vector(state->pos_I);
@@ -109,9 +96,11 @@ void step_simulation(
     double dynamic_pressure = 0.5 * env->density * V_mag * V_mag;
 
     // Compute aerodynamic forces and moments in aerodynamic frame
-    auto [force_A, moment_A] = compute_aero_forces_moments(
+    std::pair<Vector3, Vector3> aero_forces_moments = compute_aero_forces_moments(
         coeffs, dynamic_pressure, vehicle->ref_area, vehicle->ref_length
     );
+    Vector3 force_A = aero_forces_moments.first;
+    Vector3 moment_A = aero_forces_moments.second;
 
     // Transform forces and moments to body frame
     Vector3 force_B = aero_to_body(force_A);
@@ -137,9 +126,11 @@ void step_simulation(
         double q_dyn_local = 0.5 * env->density * V_local * V_local;
         
         // Use same coefficients (could be improved with state-dependent coefficients)
-        auto [f_A_local, m_A_local] = compute_aero_forces_moments(
+        std::pair<Vector3, Vector3> aero_fm_local = compute_aero_forces_moments(
             coeffs, q_dyn_local, vehicle->ref_area, vehicle->ref_length
         );
+        Vector3 f_A_local = aero_fm_local.first;
+        Vector3 m_A_local = aero_fm_local.second;
         Vector3 f_B_local = aero_to_body(f_A_local) + thrust_B;
         Vector3 f_I_local = body_to_inertial(f_B_local, q) + gravity * m;
         Vector3 m_B_local = aero_to_body(m_A_local);

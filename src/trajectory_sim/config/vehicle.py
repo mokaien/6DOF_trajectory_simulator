@@ -16,14 +16,14 @@ class VehicleConfig:
     Iyy: float  # Pitch moment of inertia (kg*m^2)
     Izz: float  # Yaw moment of inertia (kg*m^2)
     
+    # Reference dimensions for aerodynamics
+    ref_area: float  # Reference area (m^2)
+    ref_length: float  # Reference length for moments (m)
+    
     # Products of inertia (optional, default to zero)
     Ixy: float = 0.0  # Product of inertia (kg*m^2)
     Ixz: float = 0.0  # Product of inertia (kg*m^2)
     Iyz: float = 0.0  # Product of inertia (kg*m^2)
-    
-    # Reference dimensions for aerodynamics
-    ref_area: float  # Reference area (m^2)
-    ref_length: float  # Reference length for moments (m)
     
     def to_c_struct(self):
         """Convert to C API VehicleParams structure."""
