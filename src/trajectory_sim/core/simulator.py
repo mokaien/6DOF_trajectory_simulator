@@ -253,7 +253,7 @@ class Simulator:
         # Get Mach number
         altitude = -self.state.pos_I[2]
         atm_state = self.atmosphere.get_atmosphere(altitude)
-        mach = V_mag / atm_state.speed_of_sound if atm_state.speed_of_sound > 1e-6 else 0.0
+        mach = V_mag / atm_state["speed_of_sound"] if atm_state["speed_of_sound"] > 1e-6 else 0.0
         
         # Get control inputs
         control = self._get_control_inputs(time)
