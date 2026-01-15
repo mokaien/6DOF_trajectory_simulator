@@ -60,14 +60,29 @@ def main():
         controller=controller,
     )
     
-    # Run simulation
+    # Calculate terminal velocity at initial altitude
     print("Running free-fall simulation...")
     runner = SimulationRunner(config)
+    
+    # Calculate terminal velocity at sea level (for comparison)
+    import numpy as np
+    v_terminal_sea = runner.simulator.calculate_terminal_velocity(altitude=0.0)
+    v_terminal_initial = runner.simulator.calculate_terminal_velocity(altitude=10000.0)
+    print(f"Terminal velocity at sea level: {v_terminal_sea:.2f} m/s")
+    print(f"Terminal velocity at 10 km: {v_terminal_initial:.2f} m/s")
+    print()
+    
     runner.run()
     
     # Get results
     results = runner.get_results()
     print(f"Simulation completed. {len(results['states'])} time steps.")
+    
+    # Check if object hit ground
+    final_state = runner.get_final_state()
+    final_altitude = -final_state.pos_I[2]
+    if final_altitude <= 0:
+        print("Object reached ground level.")
     
     # Plot results
     print("Plotting results...")
@@ -75,11 +90,15 @@ def main():
     plot_trajectory_3d(results)
     
     # Print final state
-    final_state = runner.get_final_state()
-    import numpy as np
     speed = np.linalg.norm(final_state.vel_I)
-    print(f"\nFinal altitude: {-final_state.pos_I[2]:.2f} m")
+    print(f"\nFinal altitude: {final_altitude:.2f} m")
     print(f"Final speed: {speed:.2f} m/s")
+    
+    # Compare with terminal velocity
+    if final_altitude > 0:
+        v_terminal_final = runner.simulator.calculate_terminal_velocity(altitude=final_altitude)
+        print(f"Terminal velocity at final altitude: {v_terminal_final:.2f} m/s")
+        print(f"Speed / Terminal velocity ratio: {speed / v_terminal_final:.3f}")
 
 
 if __name__ == "__main__":
